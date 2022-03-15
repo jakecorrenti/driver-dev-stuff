@@ -88,7 +88,7 @@ static loff_t cdriver_llseek(struct file *filp, loff_t offset, int whence)
         default: // cannot happen
             return -ENOTTY;
     }
-    if (new_pos < 0)
+    if (new_pos < 0 || new_pos >= string_len)
         return -EINVAL;
 
     filp->f_pos = new_pos;
