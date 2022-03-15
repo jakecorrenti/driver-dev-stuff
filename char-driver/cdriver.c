@@ -4,6 +4,10 @@
 #include <linux/cdev.h>
 #include <linux/types.h>
 
+unsigned current_write_idx = 0;
+unsigned string_len = 10;
+char string[10] = {" "};
+
 static dev_t dev;
 static struct cdev *cdev;
 
@@ -21,12 +25,11 @@ static int cdriver_release(struct inode *inode, struct file *filp)
 
 static ssize_t cdriver_read(struct file *filp, char __user *buf, size_t count, loff_t *fpos)
 {
-    // currently just writes an endless amount of 0's and 1's to the screen
     unsigned i;
     pr_info("cdriver read\n");
-    for (i = 0; i < count; i++)
+    for (i = 0; i < string_len; i++)
     {
-        if (copy_to_user(buf+i, i % 2 == 0 ? "0" : "1", 1))
+        if (copy_to_user(buf+i, string+i, 1))
         {
             pr_err("error copying to user\n");
             return -EFAULT;
@@ -39,10 +42,64 @@ static ssize_t cdriver_read(struct file *filp, char __user *buf, size_t count, l
 
 static ssize_t cdriver_write(struct file *filp, const char __user *buf, size_t count, loff_t *fpos)
 {
+    char buffer[1];
+    size_t i;
     pr_info("cdriver write\n");
+
+    if (copy_from_user(buffer, buf, 1))
+    {
+        pr_err("error copying to user\n");
+        return -EFAULT;
+    }
+
+    if (current_write_idx >= string_len - 1)
+        current_write_idx = 0;
+
+    string[current_write_idx] = buffer[0];
+    current_write_idx++;
+
+    pr_info("buffer value: %c\n", buffer[0]);
+    pr_info("current write index: %i\n", current_write_idx);
+
+    pr_info("current string val: ");
+    for (i = 0; i < string_len; i++)
+    {
+        pr_info("%c", string[i]);
+    }
 
     *fpos += count;
     return count;
+}
+
+static loff_t cdriver_llseek(struct file *filp, loff_t offset, int whence)
+{
+    loff_t new_pos;
+
+    switch (whence) {
+        case 0: // SEEK_SET
+            new_pos = offset;
+            break;
+        case 1: // SEEK_CUR 
+            new_pos = filp->f_pos + offset;
+            break;
+        case 2: // SEEK_END
+            new_pos = current_write_idx + offset;
+            break;
+        default: // cannot happen
+            return -ENOTTY;
+    }
+    if (new_pos < 0)
+        return -EINVAL;
+
+    filp->f_pos = new_pos;
+    return new_pos;
+}
+
+static long cdriver_ioctl(struct file *filp, unsigned cmd, unsigned long arg)
+{
+    // TODO(jakecorrenti): have current_write_idx = 0 
+    // TODO(jakecorrenti): change the direction in which the buffer vals are changed (front -> back | back -> front)
+    return 3;
 }
 
 static const struct file_operations fops = {
@@ -51,6 +108,8 @@ static const struct file_operations fops = {
     .release = cdriver_release,
     .read = cdriver_read,
     .write = cdriver_write,
+    .llseek = cdriver_llseek,
+    .unlocked_ioctl = cdriver_ioctl,
 };
 
 static int __init cdriver_init(void)
