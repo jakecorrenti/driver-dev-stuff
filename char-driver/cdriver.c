@@ -52,14 +52,14 @@ static ssize_t cdriver_write(struct file *filp, const char __user *buf, size_t c
         return -EFAULT;
     }
 
-    if (current_write_idx >= string_len - 1)
-        current_write_idx = 0;
-
     string[current_write_idx] = buffer[0];
     current_write_idx++;
 
+    if (current_write_idx > string_len - 1)
+        current_write_idx = 0;
+
     pr_info("buffer value: %c\n", buffer[0]);
-    pr_info("current write index: %i\n", current_write_idx);
+    pr_info("current write index: %i\n", current_write_idx-1);
 
     pr_info("current string val: ");
     for (i = 0; i < string_len; i++)
